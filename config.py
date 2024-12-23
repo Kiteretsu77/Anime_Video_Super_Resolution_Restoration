@@ -28,7 +28,7 @@ class configuration:
     use_rename = False       # Sometimes the video that users download may include unsupported characters, so we rename it if this one is True
 
     # Multithread and Multiprocessing setting 
-    process_num = 3          # The number of fully parallel processed video clips
+    process_num = 2          # The number of fully parallel processed video clips
     full_model_num = 2       # Full frame thread instance number
     nt = 2                   # Partition frame (1/3 part of a frame) instance number 
 

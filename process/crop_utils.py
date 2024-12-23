@@ -71,8 +71,6 @@ def crop4partition_SR(img, position = 3):
 
     # Preparation
     scale = configuration.scale
-    # TODO: 这里还没有完全考虑rescale后的办法，这个需要再想想 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
     height, width, _ = img.shape
     crop_base = height // 3  # 160 for 480p
     side_extra_padding = configuration.pixel_padding // 3
@@ -114,7 +112,6 @@ def combine_partitions_SR(crop1, crop2, crop3):
 
 
     scale = configuration.scale
-    # TODO: 这里还没有完全考虑rescale后的办法，这个需要再想想 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     cropped_padding = configuration.pixel_padding
     h, w, c = crop1.shape
 

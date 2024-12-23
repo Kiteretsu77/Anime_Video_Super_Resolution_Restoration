@@ -127,7 +127,7 @@ def split_video(input_file, parallel_num):
     print("duration is ", duration)
     divide_time = math.ceil(duration // parallel_num) + 1
 
-    # TODO: 直接拆分audio出来，这样子就不会出现中途有卡壳的情况
+
     # Split audio
     audio_split_cmd = "ffmpeg -i " + input_file +  " -map 0:a -c copy tmp/output_audio.m4a"
     os.system(audio_split_cmd)
@@ -252,7 +252,6 @@ def single_process(model_full_name, model_partition_name, params, process_id):
     config_preprocess(params, configuration)
 
 
-    # TODO: 我觉得这里应该直接读取video height和width然后直接选择模型，不然每次自己手动很麻烦
     video_upscaler = VideoUpScaler(configuration, model_full_name, model_partition_name, process_id)
     print("="*100)
     print("Current Processing file is ", configuration.inp_path)

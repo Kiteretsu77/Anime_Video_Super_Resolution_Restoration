@@ -130,7 +130,7 @@ class VideoUpScaler(object):
         print("This process id is ", self.process_id)
 
 
-        self.max_cache_loop = (self.nt + self.full_model_num) * 200     # The is for bug report purpose (正常来说，取值要小于total frame num，不然就查不出来了)
+        self.max_cache_loop = (self.nt + self.full_model_num) * 200     # The is for bug report purpose (should be less thantotal frame num)
         #################################################################################################################################
 
         ################################### Load model ##################################################################################
@@ -245,24 +245,16 @@ class VideoUpScaler(object):
             # Use original fps as decode fps
             self.decode_fps = original_fps
         self.total_frame_number = int(self.decode_fps * (nframes/original_fps))
+
+        # Build Video Writer 
+        self.writer = FFMPEG_VideoWriter(output_path, (self.width * self.scale * self.rescale_factor, self.height * self.scale * self.rescale_factor), self.decode_fps, ffmpeg_params=self.encode_params)
         #############################################################################################
 
         
-        ################################### Build Video Writer ##############################################################################################################################
-        if has_audio:
-            tmp_audio_path = "output_audio.m4a" # "%s.m4a" % tmp_path
-            objVideoreader.audio.write_audiofile(tmp_audio_path, codec="aac")
-            # 得到的writer先给予audio然后再一帧一帧的写frame
-            self.writer = FFMPEG_VideoWriter(output_path, (self.width * self.scale * self.rescale_factor, self.height * self.scale * self.rescale_factor), self.decode_fps, ffmpeg_params=self.encode_params, audiofile=tmp_audio_path)
-        else:
-            self.writer = FFMPEG_VideoWriter(output_path, (self.width * self.scale * self.rescale_factor, self.height * self.scale * self.rescale_factor), self.decode_fps, ffmpeg_params=self.encode_params)
-        #####################################################################################################################################################################################
-
-
-
+        
         video_decode_loop_start = ttime()
         ######################################### video decode loop #######################################################
-        for frame_idx, frame in enumerate(objVideoreader.iter_frames(fps=self.decode_fps)): # 删掉了target fps
+        for frame_idx, frame in enumerate(objVideoreader.iter_frames(fps=self.decode_fps)): 
             
             # Rescale the video frame at the beginning if we want a different output resolution
             if self.rescale_factor != 1:
@@ -272,14 +264,12 @@ class VideoUpScaler(object):
             if frame_idx % 50 == 0 or int(self.total_frame_number) == frame_idx:
                 # 以后print这边用config统一管理
                 print("Total frame:%s\t video decoded frames:%s"%(int(self.total_frame_number), frame_idx))
-                sleep(self.decode_sleep)  # 否则解帧会一直抢主进程的CPU到100%，不给其他线程CPU空间进行图像预处理和后处理
-                    # 目前nt=1的情况来说，不写也无所谓
+                sleep(self.decode_sleep)  # This is very needed to avoid conflict in the process that is too overwhelming
 
 
             # Check if NN process too slow to catch up the frames decoded
             decode_processed_diff = frame_idx - self.now_idx
             if decode_processed_diff >= 650:        # This is an empirical value
-                #TODO: 这个插值也要假如config中
                 self.frame_write()
                 if decode_processed_diff >= 1000:
                     # Have to do this else it's possible to raise bugs
@@ -298,7 +288,6 @@ class VideoUpScaler(object):
                 queue_put_idx = [3]
 
                 # Init the reference_frame and reference_idx
-                # TODO: reference_frame && reference_idx 写到一个func中
                 for i in range(3):
                     cropX = eval("crop%s"%i)
                     self.reference_frame[i] = cropX[:, :, 0]            # We only store Single Red Channel to compare to accelerate
@@ -308,7 +297,7 @@ class VideoUpScaler(object):
                 self.time2switchFULL -= 1       # Update the counter
                 self.momentum_used_times += 1   # Update the number of frames we process with momentum
 
-                # 根据full_model_num和nt 进行调整
+                # Abjust based on full_model_num and nt
                 if self.full_model_num > 0:
                     queue_put_idx = [3]
                 else:       # In this case, we can only use partition queue
@@ -344,7 +333,6 @@ class VideoUpScaler(object):
                         self.momentum_reference.append(True)
                         if sum(self.momentum_reference) == self.momentum_reference_size:
                             # If we have momentum_reference_size amount of frames that have big MSE difference between consequent frames, we activate MOMENTUM mechanism
-                            # 考虑到reference_frame的重置，我们time2switchFULL影响到的frame是 momentum_skip_crop_frame_num + 1
                             # print("We need to use momentum at frame {}".format(frame_idx))
                             self.time2switchFULL = self.momentum_skip_crop_frame_num                    # Set how many frames we will skip
                             self.reference_frame = [None, None, None]                                   # Reset reference
@@ -383,7 +371,7 @@ class VideoUpScaler(object):
                             # print("We skip frame_idx {} and partition_idx {}!".format(frame_idx, partition_idx))
 
 
-            # Put partition/full frames into the queue  这里只是管理queue的，其他的比如idx2res这些都在上面处理完了(样子设计就是为了更好的程序设计)
+            # Put partition/full frames into the queue 
             if 3 in queue_put_idx:
                 # Full frame put into the queue
                 assert(len(queue_put_idx) == 1)     # We cannot have partition idx here
@@ -407,8 +395,7 @@ class VideoUpScaler(object):
 
 
         ################################################ 后面残留的计算 ##################################################
-        frame_idx += 1 # 调整成frames总数量
-        #等待所有的处理完,最后读取一遍全部的图片
+        frame_idx += 1 # Fit the total number of frames
         while True:
             self.frame_write()
 
@@ -423,27 +410,26 @@ class VideoUpScaler(object):
                     assert(self.inp_q.qsize() == 0)
                 assert(self.res_q.qsize() == 0)
                 break
-
-            # TODO: 这个目前发现不运行就会出问题, 要不要用decode sleep统一处理, 这个bug是不是res_q满载了的原因
-            sleep(self.decode_sleep) # 原本0.01
+            
+            # TODO: optimize this code if needed
+            sleep(self.decode_sleep)
 
         print("Final image index is ", self.now_idx)
 
-        for _ in range(self.nt):  # 全部结果拿到后，关掉模型线程
+        # Closs all queues
+        for _ in range(self.nt):  
             self.inp_q.put(None)
         for _ in range(self.full_model_num):
             self.inp_q_full.put(None)
 
         # close writer to save all stuff
         self.writer.close()
-        if has_audio:
-            os.remove(tmp_audio_path)
         
 
         video_decode_loop_end = ttime()
-        ################################################################################################################
+        ################################################################################################################################################
 
-        ##################################### 分析汇总 ##################################################################
+        ############################################################ Analysis ##########################################################################
         # Calculation
         full_time_spent = video_decode_loop_end - video_decode_loop_start
         total_exe_fps = self.total_frame_number / full_time_spent
@@ -456,8 +442,7 @@ class VideoUpScaler(object):
             print("Done! Total time cost:", full_time_spent)
         else:
             print("Done! Total time cost: %d min %d s" %(full_time_spent//60, full_time_spent%60))
-        # print("The total duration is ", total_duration)
-        # print("The scaling of processing_time/total_video_duration is {} %".format((full_time_spent/total_duration) * 100))
+
 
         # Details report
         print("The following is the detailed report:")
@@ -466,10 +451,10 @@ class VideoUpScaler(object):
                 self.parition_processed_num, 100 * self.parition_processed_num / (self.total_frame_number * 3)))
         print("\t Total full_frame_cal_num is %d which is %.2f %%" %(self.full_frame_cal_num, 100*full_frame_portion))
         print("\t Total momentum used num is %d which is %.2f %%" %(self.momentum_used_times, 100*self.momentum_used_times//self.total_frame_number))
-        ################################################################################################################
+        #############################################################################################################################################
         
 
-        ##################################### Generate Final Report ####################################################
+        ##################################### Generate Final Report #################################################################################
         report = {}
         report["input_path"] = input_path
         report["full_time_spent"] = full_time_spent
@@ -487,22 +472,22 @@ class VideoUpScaler(object):
         ''' Extract parition/full frame from res_q and write to ffmpeg writer (moviepy)
         '''
 
-        #Step1：写入暂存器，因为多进程多线程的结果是不均匀出来的
-        while True:  # 取出处理好的所有结果
+        #Step1：Write to tmp places because multi-process and multi-threading is unblanced
+        while True:  # Get all the processed results
             if self.res_q.empty():
                 break
             iidx, position, res = self.res_q.get()
             self.idx2res[iidx][position] = res
 
 
-        #Step2: 把暂存器的内容写到writer中
+        #Step2: put the tmp result to video writer 
         while True:  # 按照idx排序写帧
             if not self.res_q.empty():
                 iidx, position, res = self.res_q.get()
                 self.idx2res[iidx][position] = res
 
-            #这里一定保证是sequential的，所以repeat frame前面的reference完全有加载
-            if self.loop_counter == self.max_cache_loop:  #####这个系数也要config管理！#####
+            # For sanity check purpose
+            if self.loop_counter == self.max_cache_loop: 
                 self.writer.close()
                 print("Ends at frame ", self.now_idx)
                 print("\t Continuously not found, end the program and store what's stored")
@@ -515,11 +500,11 @@ class VideoUpScaler(object):
             self.loop_counter = 0
 
 
-            ########################################## 下面确保了frame的所有部分都是在的 ############################################
+            ######################################## The following is safe to execute with all frames needed #######################################
             if self.now_idx % 50 == 0:
                 print("Process {} had written frames: {}".format(self.process_id, self.now_idx))
 
-            # 3种类型的crop处理
+            # 3 types of cropping
             if 3 not in self.idx2res[self.now_idx]:
                 # Partition Frame cases
                 crops = []
@@ -536,13 +521,13 @@ class VideoUpScaler(object):
                         # This one is NN inferenced result
                         crops.append(self.idx2res[self.now_idx][idx])
 
-                combined_frame = combine_partitions_SR(*crops)  # adjust是完全固定的值
+                combined_frame = combine_partitions_SR(*crops)  # adjust is a fixed value
             else:
                 # Full frame cases
                 combined_frame = self.idx2res[self.now_idx][3]
 
             # Write the frame
-            # cv2.imwrite(str(self.now_idx)+".png", cv2.cvtColor(combined_frame, cv2.COLOR_BGR2RGB))  # For Debug purpose (这个只能process=1的时候，不然会相互write without protection)
+            # cv2.imwrite(str(self.now_idx)+".png", cv2.cvtColor(combined_frame, cv2.COLOR_BGR2RGB))  # For Debug purpose (Please set the process_num = 1)
             self.writer.write_frame(combined_frame)
 
 
@@ -555,7 +540,7 @@ class VideoUpScaler(object):
 
 
     def queue_put(self, frame_idx, position, frame, full):
-        ''' Put into the queue (集中管理)
+        ''' Put into the queue
         Args:
             frame_idx (int):    Global frame index
             position (int):     Position of frame 0|1|2|3

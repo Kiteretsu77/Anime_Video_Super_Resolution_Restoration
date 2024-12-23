@@ -55,7 +55,6 @@ def mass_process(input_folder_dir, output_dir_parent):
 
 
         # Process the video
-        # TODO: 利用log的report看看要不要减少partition的thread数量，毕竟相同视频类型都是相似的
         parallel_process(input_dir, output_name, parallel_num=configuration.process_num)
 
 

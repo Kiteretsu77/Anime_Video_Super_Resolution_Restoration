@@ -41,14 +41,14 @@ class UpCunet2x(nn.Module):
 
 
     def forward(self, input):
-        x = F.pad(input, (18, 18, 18, 18), 'reflect')  # pad最后一个倒数第二个dim各上下18个（总计36个）
+        x = F.pad(input, (18, 18, 18, 18), 'reflect')  # (18, 18, 18, 18) is emperical padding hard-code
 
         ######################## Neural Network Inference #############################
         unet_full_output = self.unet_model_full(x)
         #############################################################################
 
 
-        # 目前默认是pro mode (pro跟weight有关)
+        # pro mode in default process
         return ((unet_full_output - 0.15) * (255/0.7)).round().clamp_(0, 255).byte()
 
         

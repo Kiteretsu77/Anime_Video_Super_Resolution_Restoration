@@ -115,7 +115,6 @@ class UNet1(nn.Module):
         # x3 = F.leaky_relu(x3, 0.1, inplace=True)
         # z = self.conv_bottom(x3)
 
-        #大概逻辑就是一个变小+conv+deconv，另外一个正常conv，然后两个加载一起并且deconv到大概两倍的样子
         return z
 
     def forward_a(self, x):
@@ -163,7 +162,7 @@ class UNet2(nn.Module):
                     nn.init.constant_(m.bias, 0)
 
     def forward(self, x, alpha = 1):
-        #整体就是unet结构
+        # UNet Structure
         x1 = self.conv1(x)
         x2 = self.conv1_down(x1)
         x1 = F.pad(x1, (-16, -16, -16, -16))
@@ -185,7 +184,7 @@ class UNet2(nn.Module):
         z = self.conv_bottom(x5)
         return z
 
-    def forward_a(self, x):#conv234结尾有se
+    def forward_a(self, x):
         x1 = self.conv1(x)
         x2 = self.conv1_down(x1)
         x1 = F.pad(x1, (-16, -16, -16, -16))
@@ -193,20 +192,20 @@ class UNet2(nn.Module):
         x2 = self.conv2.conv(x2)
         return x1,x2
 
-    def forward_b(self, x2):  # conv234结尾有se
+    def forward_b(self, x2):  
         x3 = self.conv2_down(x2)
         x2 = F.pad(x2, (-4, -4, -4, -4))
         x3 = F.leaky_relu(x3, 0.1, inplace=True)
         x3 = self.conv3.conv(x3)
         return x2,x3
 
-    def forward_c(self, x2,x3):  # conv234结尾有se
+    def forward_c(self, x2,x3): 
         x3 = self.conv3_up(x3)
         x3 = F.leaky_relu(x3, 0.1, inplace=True)
         x4 = self.conv4.conv(x2 + x3)
         return x4
 
-    def forward_d(self, x1,x4):  # conv234结尾有se
+    def forward_d(self, x1,x4):  
         x4 = self.conv4_up(x4)
         x4 = F.leaky_relu(x4, 0.1, inplace=True)
         x5 = self.conv5(x1 + x4)

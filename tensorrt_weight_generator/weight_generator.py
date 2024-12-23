@@ -54,7 +54,7 @@ class Generator:
         # Don't forget this np2tensor
         tensor = np2tensor(array, pro=True)
         # tensor = ToTensor()(array).unsqueeze(0).cuda()
-        input = F.pad(tensor, (18, 18, 18, 18), 'reflect').cuda()  # pad最后一个倒数第二个dim各上下18个（总计36个）
+        input = F.pad(tensor, (18, 18, 18, 18), 'reflect').cuda()  # (18, 18, 18, 18) is hard-code padding
 
         return input
     
@@ -63,26 +63,6 @@ class Generator:
         tensor = np2tensor(array, pro=False)
 
         return tensor
-
-    def after_process(self, x):
-
-        ####Q: 是不是add以后这边变成cpu更加节约时间
-
-        # h0 = 480
-        # w0 = 640
-        # ph = ((h0 - 1) // 2 + 1) * 2 # 应该是用来确认奇数偶数的
-        # pw = ((w0 - 1) // 2 + 1) * 2
-        # if w0 != pw or h0 != ph:
-        #     x = x[:, :, :h0 * 2, :w0 * 2] #调整成偶数的size
-
-        if self.h%2 != 0 or self.w%2 != 0:
-            print("ensure that width and height to be even number")
-            os._exit(0)
-
-        ########目前默认是pro mode
-        temp =  ((x - 0.15) * (255/0.7)).round().clamp_(0, 255).byte()
-        # print("After after-process, the shape is ", temp.shape)
-        return temp
 
 
     def model_weight_transform(self, input):
@@ -151,7 +131,7 @@ class Generator:
         print("Finish generating the tensorRT weight and save at {}".format(save_path))
 
 
-        # 测试一下output
+        # Transform to trt model
         output = model_trt_model(input)
         print("TensorRT Sample input shape is ", input.shape)
         print("TensoRT Sample output shape is ", output.shape)
@@ -160,7 +140,6 @@ class Generator:
         
 
     def weight_generate(self):
-        # 如果要从头开始weight生成的话，dont_calculate_transform为false；只是image大量测试，就用true就行
         self.dont_calculate_transform = False
 
         self.model_weight_transform(self.sample_input)
@@ -210,7 +189,7 @@ def crop_image(sample_img_dir, target_h, target_w):
         print("Such height and/or width is not supported, please use a larger sample input")
         os._exit(0)
 
-    croped_img = img[:target_h, :target_w,:] # 第一个是height，第二个是width
+    croped_img = img[:target_h, :target_w,:] 
     print("Size after crop is ", croped_img.shape)
     cv2.imwrite(configuration.full_croppped_img_dir, croped_img)
 
