@@ -14,8 +14,8 @@ class configuration:
 
     ########################################################### Fundamental Setting #######################################################################################   
     model_name = "VCISR"                        # Supported: "Real-CUGAN" (base:2x) || "Real-ESRGAN" (base:4x) || "VCISR" (base:2x)
-    inp_path = "../videos/pokemon_crop.mp4"            # Intput path (can be a single video file or a folder directory with videos)
-    opt_path = "../videos/pokemon_processed.mp4"       # Output path after processing video/s of inp_path (PS: If inp_path is a folder, opt_path should also be a folder)
+    inp_path = "./i.mp4"            # Intput path (can be a single video file or a folder directory with videos)
+    opt_path = "./o.mp4"       # Output path after processing video/s of inp_path (PS: If inp_path is a folder, opt_path should also be a folder)
     rescale_factor = 1                          # What rescale for the input frames before doing Super-Resolution [Use this way to take less computation for SR model]
                                                 # [default 1 means no rescale] We recommend use some value like 0.5, 0.25 to avoid invalid input size in certain minor cases            
     #######################################################################################################################################################################
